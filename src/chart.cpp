@@ -160,6 +160,7 @@ static void DrawOne(HDC dc, const RECT& rc, const Chart& c0, const ChartFonts& f
                 hi = std::max(hi, v);
             }
     for (auto& m : c.hmarks) hi = std::max(hi, m.v);
+    if (std::isfinite(c.yHiAtLeast)) hi = std::max(hi, c.yHiAtLeast);
     bool hasData = std::isfinite(lo);
     if (!hasData) {
         lo = c.yLog ? 1 : 0;
@@ -300,20 +301,25 @@ static void DrawOne(HDC dc, const RECT& rc, const Chart& c0, const ChartFonts& f
         flush();
     }
     for (auto& s : c.s) {
-        HPEN p = MakePen(s.col, s.dash ? Sc(f, 1) + 1 : Sc(f, 2), s.dash);
+        // в панелях линия тоньше: пики сырых замеров не сливаются в сплошную заливку
+        HPEN p = MakePen(s.col, s.dash || panel ? Sc(f, 1) + (panel ? 0 : 1) : Sc(f, 2), s.dash);
         SelectObject(dc, p);
-        bool pen = false;
+        // ломаная целиком через Polyline: у пунктира рисунок штрихов идёт непрерывно,
+        // а не начинается заново на каждом коротком отрезке
+        std::vector<POINT> run;
+        auto flush = [&] {
+            if (run.size() > 1) Polyline(dc, run.data(), (int)run.size());
+            run.clear();
+        };
         for (size_t i = 0; i < s.x.size() && i < s.y.size(); i++) {
             double v = s.y[i];
             if (!std::isfinite(v) || (c.yLog && v <= 0)) {
-                pen = false;
+                flush();
                 continue;
             }
-            int x = (int)std::lround(X(s.x[i])), y = (int)std::lround(Y(v));
-            if (!pen) MoveToEx(dc, x, y, nullptr);
-            else LineTo(dc, x, y);
-            pen = true;
+            run.push_back({(int)std::lround(X(s.x[i])), (int)std::lround(Y(v))});
         }
+        flush();
         SelectObject(dc, grid);
         DeleteObject(p);
     }
@@ -329,13 +335,18 @@ static void DrawOne(HDC dc, const RECT& rc, const Chart& c0, const ChartFonts& f
     // ---- подпись панели слева сверху
     if (panel && !title.empty()) {
         SelectObject(dc, f.bold);
+        SIZE ts = TextSize(dc, title);
+        RECT tb = {P.left + 1, P.top + 1, P.left + Sc(f, 12) + ts.cx, P.top + Sc(f, 6) + ts.cy};  // подложка: линия не идёт по тексту
+        HBRUSH bb = CreateSolidBrush(th::chartBg);
+        FillRect(dc, &tb, bb);
+        DeleteObject(bb);
         SetTextColor(dc, c.s.size() == 1 ? c.s[0].col : th::text);
         TextAt(dc, P.left + Sc(f, 8), P.top + Sc(f, 4), title, TA_LEFT | TA_TOP);
         SelectObject(dc, f.normal);
     }
 
     // ---- легенда в правом верхнем углу графика
-    if (!c.s.empty() && !panel) {
+    if (!c.s.empty() && (!panel || c.s.size() > 1)) {
         int sample = Sc(f, 18), gap = Sc(f, 10);
         int total = TextSize(dc, c.legendTitle).cx + gap;
         for (auto& s : c.s) total += sample + Sc(f, 4) + TextSize(dc, s.name).cx + gap;
@@ -480,6 +491,10 @@ void DrawChart(HDC dc, const RECT& rc, const Chart& c, const ChartFonts& f, POIN
     const int xl = lh * 2 + Sc(f, 6), gap = Sc(f, 6);
     const int ph = (rc.bottom - top - xl - gap * (c.rows - 1)) / c.rows;
     const int pw = (rc.right - rc.left) / c.cols;
+    double hiAll = NAN;  // у всех панелей один масштаб Y — их можно сравнивать на глаз
+    for (auto& s : c.s)
+        for (double v : s.y)
+            if (std::isfinite(v)) hiAll = std::isfinite(hiAll) ? std::max(hiAll, v) : v;
     for (int p = 0; p < n; p++) {
         int row = p / c.cols, col = p % c.cols;
         bool last = row == c.rows - 1;
@@ -487,6 +502,7 @@ void DrawChart(HDC dc, const RECT& rc, const Chart& c, const ChartFonts& f, POIN
                    top + row * (ph + gap) + ph + (last ? xl : 0)};
         Chart sub = c;
         sub.rows = sub.cols = 1;
+        sub.yHiAtLeast = hiAll;
         sub.s.clear();
         for (auto& s : c.s)
             if (s.panel == p) sub.s.push_back(s);

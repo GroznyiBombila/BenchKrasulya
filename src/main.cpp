@@ -253,32 +253,26 @@ static void BuildTab(int tab, Chart& ch, Table& tb, std::vector<std::wstring>& n
         ch.yLog = false;
         ch.yUnit = L"ГБ/с";
         ch.xTitle = L"Скачок адреса между блоками, байт (< 0 — блоки идут к младшим адресам)";
-        ch.legendTitle = w ? L"Запись блока:" : L"Чтение блока:";
+        ch.legendTitle = w ? L"Запись:" : L"Чтение блока:";
         ch.xmin = -3072;
         ch.xmax = 7168;
         std::wstring area = r.valid ? (r.ramMode ? L"область " + FormatSize(r.span) + L" (ОЗУ)" : L"область 4 МБ (в пределах L3)") : L"";
         ch.header = Header(cpu, r.ghz, area);
         // чтение — один график: линия — среднее по соседним точкам, полоса — разброс;
-        // запись — панели 4×2: слева NT (в обход кэша), справа обычная, у каждого размера блока своя
+        // запись — по панели на размер блока, во всю ширину, с сырыми замерами (все колебания видны);
+        // в панели две линии цвета блока: NT (в обход кэша) сплошной и обычная (через кэш) пунктиром
         if (w) {
             ch.rows = 4;
-            ch.cols = 2;
-            ch.colTitle = {L"Запись в обход кэша (NT, MOVNT)", L"Обычная запись (через кэш)"};
-            for (int b = 0; b < 4; b++) {
-                ch.panelTitle.push_back(Fmt(L"%d Б · в обход кэша", kBlockSizes[b]));
-                ch.panelTitle.push_back(Fmt(L"%d Б · через кэш", kBlockSizes[b]));
-            }
+            for (int b = 0; b < 4; b++) ch.panelTitle.push_back(Fmt(L"Блок %d Б", kBlockSizes[b]));
         }
         if (r.valid)
             for (int b = 0; b < 4; b++) {
-                Series s = {Fmt(L"%d", kBlockSizes[b]), kBlockCol[b], false, r.jumps, r.y[b], !raw, w ? b * 2 : 0};
-                ch.s.push_back(s);
-                if (w) {
-                    s.name += L" кэш";
-                    s.y = r.yc[b];
-                    s.panel = b * 2 + 1;
-                    ch.s.push_back(s);
+                if (!w) {
+                    ch.s.push_back({Fmt(L"%d", kBlockSizes[b]), kBlockCol[b], false, r.jumps, r.y[b], !raw});
+                    continue;
                 }
+                ch.s.push_back({L"в обход кэша (NT)", kBlockCol[b], false, r.jumps, r.y[b], false, b});
+                ch.s.push_back({L"через кэш", kBlockCol[b], true, r.jumps, r.yc[b], false, b});
             }
         auto cells = [&](std::vector<std::wstring>& row, const std::vector<double>& y, double rnd) {
             JumpStats s = r.valid ? Stats(r, y, rnd) : JumpStats{NAN, NAN, NAN, NAN, NAN};
@@ -506,7 +500,7 @@ static std::wstring AboutText()
         L"  Задержка    Случайный обход цепочки указателей: сколько наносекунд/тактов ждёт одно обращение на каждом уровне.\r\n"
         L"  Чтение RAM  Блоки 32/64/128/256 Б, между блоками скачок от −3 до +7 КБ. В нуле — последовательный доступ\r\n"
         L"              (работает префетчер, строка 64 Б используется целиком, открытая строка DRAM).\r\n"
-        L"  Запись RAM  То же для записи: слева — в обход кэша (MOVNT, без чтения строки), справа — обычная запись (RFO).\r\n"
+        L"  Запись RAM  То же для записи, панель на размер блока: сплошная — в обход кэша (MOVNT, без чтения строки), пунктир — обычная запись (RFO).\r\n"
         L"  Многопоток  Суммарная скорость ОЗУ при 1…N потоках: видно насыщение контроллера памяти и вклад P/E-ядер.\r\n"
         L"  Система     Процессор, кластеры ядер, кэши, модули памяти, режим работы.\r\n"
         L"\r\n"

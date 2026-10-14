@@ -30,6 +30,7 @@ struct Chart {
     bool yLog = false;
     double xmin = 0, xmax = 1;
     double yminFixed = NAN, ymaxFixed = NAN;
+    double yHiAtLeast = NAN;   // верх оси Y не ниже этого значения (общий масштаб у панелей)
     std::vector<Series> s;
     std::vector<Mark> vmarks, hmarks;
     std::wstring empty;        // текст, если данных нет
