@@ -1,0 +1,27 @@
+#include <winver.h>
+#include "version.h"
+1 ICON "app.ico"
+1 24 "app.manifest"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION BK_VER_MAJOR,BK_VER_MINOR,BK_VER_PATCH,0
+PRODUCTVERSION BK_VER_MAJOR,BK_VER_MINOR,BK_VER_PATCH,0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "041904B0"
+    BEGIN
+      VALUE "FileDescription", "BenchKrasulya"
+      VALUE "ProductName", "BenchKrasulya"
+      VALUE "FileVersion", BK_VER_STR
+      VALUE "ProductVersion", BK_VER_STR
+      VALUE "OriginalFilename", "BenchKrasulya.exe"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x419, 1200
+  END
+END
